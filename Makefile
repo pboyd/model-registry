@@ -90,8 +90,9 @@ gen/converter: gen/grpc internal/converter/generated/converter.go
 
 # validate the openapi schema
 .PHONY: openapi/validate
-openapi/validate: bin/openapi-generator-cli
-	${OPENAPI_GENERATOR} validate -i api/openapi/model-registry.yaml
+openapi/validate: api/openapi/model-registry.yaml bin/openapi-generator-cli bin/yq
+	@$(YQ) $(YQ_EXPR) $< | diff -u $< - || (echo "$< is incorrectly formatted. Run 'make fmt/openapi' to fix it."; exit 1)
+	$(OPENAPI_GENERATOR) validate -i $<
 
 # generate the openapi server implementation
 .PHONY: gen/openapi-server
@@ -156,6 +157,10 @@ bin/golangci-lint:
 GOVERTER ?= ${PROJECT_BIN}/goverter
 bin/goverter:
 	GOBIN=$(PROJECT_PATH)/bin ${GO} install github.com/jmattheis/goverter/cmd/goverter@v1.4.1
+
+YQ ?= ${PROJECT_BIN}/yq
+bin/yq:
+	GOBIN=$(PROJECT_PATH)/bin ${GO} install github.com/mikefarah/yq/v4@v4.45.1
 
 OPENAPI_GENERATOR ?= ${PROJECT_BIN}/openapi-generator-cli
 NPM ?= "$(shell which npm)"
@@ -229,6 +234,12 @@ lint:
 lint/csi:
 	${GOLANGCI_LINT} run ${CSI_PATH}/main.go
 	${GOLANGCI_LINT} run internal/csi/...
+
+YQ_EXPR := 'sort_keys(.components.schemas) | sort_keys(.paths)'
+
+.PHONY: fmt/openapi
+fmt/openapi: api/openapi/model-registry.yaml bin/yq
+	@$(YQ) -i $(YQ_EXPR) $<
 
 .PHONY: test
 test: gen bin/envtest
