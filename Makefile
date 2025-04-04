@@ -91,14 +91,16 @@ gen/converter: gen/grpc internal/converter/generated/converter.go
 YQ_EXPR := 'sort_keys(.components.schemas) | sort_keys(.paths) | sort_keys(.components.responses)'
 
 .PHONY: fmt/openapi
-fmt/openapi: api/openapi/model-registry.yaml bin/yq
-	@$(YQ) -i $(YQ_EXPR) $<
+fmt/openapi: bin/yq
+	@$(YQ) -i $(YQ_EXPR) api/openapi/model-registry.yaml
+	@$(YQ) -i $(YQ_EXPR) api/openapi/base.yaml
 
 # validate the openapi schema
 .PHONY: openapi/validate
-openapi/validate: api/openapi/model-registry.yaml bin/openapi-generator-cli bin/yq
-	@$(YQ) $(YQ_EXPR) $< | diff -u $< - || (echo "$< is incorrectly formatted. Run 'make fmt/openapi' to fix it."; exit 1)
-	$(OPENAPI_GENERATOR) validate -i $<
+openapi/validate: bin/openapi-generator-cli bin/yq
+	@$(YQ) $(YQ_EXPR) api/openapi/model-registry.yaml | diff -u api/openapi/model-registry.yaml - || (echo "api/openapi/model-registry.yaml is incorrectly formatted. Run 'make fmt/openapi' to fix it."; exit 1)
+	@$(YQ) $(YQ_EXPR) api/openapi/base.yaml | diff -u api/openapi/base.yaml - || (echo "api/openapi/base.yaml is incorrectly formatted. Run 'make fmt/openapi' to fix it."; exit 1)
+	$(OPENAPI_GENERATOR) validate -i api/openapi/model-registry.yaml
 
 # generate the openapi server implementation
 .PHONY: gen/openapi-server
