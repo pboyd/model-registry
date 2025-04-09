@@ -33,7 +33,7 @@ paths:
         - $ref: "#/components/parameters/offset"
       responses:
         "200":
-          $ref: "#/components/responses/CatalogModelListResponse"
+          $ref: "catalog.yaml#/components/responses/CatalogModelListResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -58,7 +58,7 @@ paths:
         - $ref: "#/components/parameters/offset"
       responses:
         "200":
-          $ref: "#/components/responses/CatalogSourceListResponse"
+          $ref: "catalog.yaml#/components/responses/CatalogSourceListResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -79,7 +79,7 @@ paths:
         - ModelCatalogService
       responses:
         "200":
-          $ref: "#/components/responses/CatalogModelResponse"
+          $ref: "catalog.yaml#/components/responses/CatalogModelResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -107,7 +107,7 @@ paths:
         - ModelCatalogService
       responses:
         "200":
-          $ref: "#/components/responses/CatalogModelReadmeResponse"
+          $ref: "catalog.yaml#/components/responses/CatalogModelReadmeResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -1269,98 +1269,6 @@ components:
         mapping:
           model-artifact: "#/components/schemas/ModelArtifactUpdate"
           doc-artifact: "#/components/schemas/DocArtifactUpdate"
-    CatalogModel:
-      description: A model in the model catalog.
-      allOf:
-        - type: object
-          required:
-            - id
-          properties:
-            id:
-              type: string
-              description: ID of the model from the catalog source.
-              example: ibm-granite/granite-3.1-8b-base
-            tasks:
-              type: array
-              description: List of tasks the model is designed for.
-              items:
-                type: string
-              example:
-                - text-generation
-        - $ref: "base.yaml#/components/schemas/BaseModel"
-    CatalogModelArtifact:
-      description: A single artifact for a catalog model version.
-      allOf:
-        - $ref: "base.yaml#/components/schemas/BaseResourceDates"
-        - $ref: "base.yaml#/components/schemas/BaseModelArtifact"
-        - type: object
-          required:
-            - versionId
-          properties:
-            versionId:
-              type: string
-              description: ID of the model version this artifact belongs to.
-              example: ibm-granite/granite-3.1-8b-base
-    CatalogModelList:
-      description: List of CatalogModel entities.
-      allOf:
-        - type: object
-          properties:
-            items:
-              description: Array of `CatalogModel` entities.
-              type: array
-              items:
-                $ref: "#/components/schemas/CatalogModel"
-          required:
-            - items
-        - $ref: "base.yaml#/components/schemas/BaseResourceList"
-    CatalogModelVersion:
-      description: A single version of a model in the catalog
-      allOf:
-        - type: object
-          required:
-            - modelId
-            - id
-          properties:
-            modelId:
-              type: string
-              description: Code name of the model this version belongs to.
-              example: ibm-granite/granite-8b-base
-            id:
-              type: string
-              description: Name of the model version. Must be unique within a source.
-              example: ibm-granite/granite-3.1-8b-base
-            language:
-              type: array
-              description: List of supported languages (https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes).
-              items:
-                type: string
-              example:
-                - en
-                - es
-                - cz
-        - $ref: "base.yaml#/components/schemas/BaseModelVersion"
-        - $ref: "base.yaml#/components/schemas/BaseResourceDates"
-    CatalogSource:
-      description: A catalog source. A catalog source has CatalogModel children.
-      required:
-        - name
-      type: object
-      properties:
-        name:
-          description: The name of the catalog source.
-          type: string
-    CatalogSourceList:
-      description: List of CatalogSource entities.
-      allOf:
-        - type: object
-          properties:
-            items:
-              description: Array of `CatalogSource` entities.
-              type: array
-              items:
-                $ref: "#/components/schemas/CatalogSource"
-        - $ref: "base.yaml#/components/schemas/BaseResourceList"
     DocArtifact:
       description: A document.
       allOf:
@@ -1792,34 +1700,6 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
       description: Bad Request parameters
-    CatalogModelListResponse:
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/CatalogModelList"
-      description: A response containing a list of CatalogModel entities.
-    CatalogModelReadmeResponse:
-      content:
-        text/markdown: {}
-      description: Documentation for a model in the catalog in Markdown format.
-    CatalogModelResponse:
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/CatalogModel"
-      description: A response containing a `CatalogModel` entity.
-    CatalogSourceListResponse:
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/CatalogSourceList"
-      description: A response containing a list of CatalogSource entities.
-    CatalogSourceResponse:
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/CatalogSource"
-      description: A response containing a `CatalogSource` entity.
     Conflict:
       content:
         application/json:
