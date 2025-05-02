@@ -1117,6 +1117,41 @@ paths:
         required: true
 components:
   schemas:
+    _common:
+      type: object
+      properties:
+        id: &property-id
+          format: int64
+          description: The unique server generated id of the resource.
+          type: string
+        createTimeSinceEpoch: &property-createTimeSinceEpoch
+          format: int64
+          description: Output only. Create time of the resource in millisecond since epoch.
+          type: string
+          readOnly: true
+        lastUpdateTimeSinceEpoch: &property-lastUpdateTimeSinceEpoch
+          format: int64
+          description: |-
+            Output only. Last update time of the resource since epoch in millisecond
+            since epoch.
+          type: string
+          readOnly: true
+        name: &property-name
+          type: string
+        customProperties: &property-customProperties
+          description: User provided custom properties which are not defined by its type.
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/MetadataValue"
+        description: &property-description
+          description: |-
+            An optional description about the resource.
+          type: string
+        externalId: &property-externalId
+          description: |-
+            The external id that come from the clients’ system. This field is optional.
+            If set, it must be unique among all resources within a database instance.
+          type: string
     Artifact:
       oneOf:
         - $ref: "#/components/schemas/ModelArtifact"
@@ -1665,23 +1700,41 @@ components:
       type: string
     RegisteredModel:
       description: A registered model in model registry. A registered model has ModelVersion children.
-      allOf:
-        - $ref: "#/components/schemas/BaseResource"
-        - $ref: "#/components/schemas/RegisteredModelCreate"
+      type: object
+      required:
+        - name
+      properties:
+        customProperties: *property-customProperties
+        description: *property-description
+        externalId: *property-externalId
+        name:
+          <<: *property-name
+          description: |-
+            The client provided name of the model. It must be unique among all the RegisteredModels of the same
+            type within a Model Registry instance and cannot be changed once set.
+        id: *property-id
+        createTimeSinceEpoch: *property-createTimeSinceEpoch
+        lastUpdateTimeSinceEpoch: *property-lastUpdateTimeSinceEpoch
+        owner: *property-owner
+          type: string
+        state: *property-state
+          $ref: "#/components/schemas/RegisteredModelState"
     RegisteredModelCreate:
       description: A registered model in model registry. A registered model has ModelVersion children.
       required:
         - name
-      allOf:
-        - $ref: "#/components/schemas/BaseResourceCreate"
-        - $ref: "#/components/schemas/RegisteredModelUpdate"
-        - type: object
-          properties:
-            name:
-              description: |-
-                The client provided name of the model. It must be unique among all the RegisteredModels of the same
-                type within a Model Registry instance and cannot be changed once set.
-              type: string
+      type: object
+      properties:
+        customProperties: *property-customProperties
+        description: *property-description
+        externalId: *property-externalId
+        name:
+          <<: *property-name
+          description: |-
+            The client provided name of the model. It must be unique among all the RegisteredModels of the same
+            type within a Model Registry instance and cannot be changed once set.
+        owner: *property-owner
+        state: *property-state
     RegisteredModelList:
       description: List of RegisteredModels.
       allOf:
@@ -1707,14 +1760,13 @@ components:
       type: string
     RegisteredModelUpdate:
       description: A registered model in model registry. A registered model has ModelVersion children.
-      allOf:
-        - $ref: "#/components/schemas/BaseResourceUpdate"
-        - type: object
-          properties:
-            owner:
-              type: string
-            state:
-              $ref: "#/components/schemas/RegisteredModelState"
+      type: object
+      properties:
+        customProperties: *property-customProperties
+        description: *property-description
+        externalId: *property-externalId
+        owner: *property-owner
+        state: *property-state
     ServeModel:
       description: An ML model serving action.
       allOf:
