@@ -66,7 +66,7 @@ func runCatalogServer(cmd *cobra.Command, args []string) error {
 
 	loader := catalog.NewLoader(services, catalogCfg.ConfigPath)
 
-	perfLoader, err := catalog.NewPerformanceMetricsLoader(catalogCfg.PerformanceMetricsPath, services.CatalogModelRepository, services.CatalogMetricsArtifactRepository, repoSet.TypeMap())
+	perfLoader, err := catalog.NewPerformanceMetricsLoader(catalogCfg.PerformanceMetricsPath, services, repoSet.TypeMap())
 	if err != nil {
 		return fmt.Errorf("error initializing performance metrics: %v", err)
 	}

@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -149,7 +150,7 @@ func TestParseMetadataJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseMetadataJSON([]byte(tt.jsonData))
+			got, err := parseMetadataJSON(strings.NewReader(tt.jsonData))
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseMetadataJSON() error = %v, wantErr %v", err, tt.wantErr)
@@ -208,7 +209,7 @@ func TestParseMetadataJSON_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseMetadataJSON([]byte(tt.jsonData))
+			_, err := parseMetadataJSON(strings.NewReader(tt.jsonData))
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseMetadataJSON() error = %v, wantErr %v", err, tt.wantErr)
@@ -224,7 +225,7 @@ func TestParseMetadataJSON_OnlyIDMatters(t *testing.T) {
 		"custom_field": "ignored"
 	}`
 
-	metadata, err := parseMetadataJSON([]byte(jsonData))
+	metadata, err := parseMetadataJSON(strings.NewReader(jsonData))
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
