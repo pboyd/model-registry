@@ -68,7 +68,7 @@ jobs:
           done
       - name: Create Test Registry
         run: |
-          kubectl apply -k "https://github.com/opendatahub-io/model-registry-operator.git/config/samples/mysql?ref=${BRANCH}"
+          kubectl apply -k "https://github.com/pboyd/model-registry-operator.git/config/samples/mysql?ref=mysql-sample-fix"
           kubectl get mr
       - name: Wait for Test Registry Deployment
         run: |
