@@ -143,8 +143,8 @@ func (v *visitor) checkEntities() {
 func checkEntity(entity *oapiEntity) []string {
 	res := []string{}
 	objType := reflect.TypeOf(entity.obj)
-	for i := 0; i < objType.NumField(); i++ {
-		field := objType.Field(i)
+	for field := range objType.Fields() {
+		field := field
 		if !strings.Contains(entity.notEditableFields, field.Name) && !strings.Contains(entity.ignoredFields, field.Name) {
 			// check if the not editable field (first check) is not present in the ignored fields (second check)
 			// if this condition is true, we missed that field in the Override method ignore list
