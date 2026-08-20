@@ -17,34 +17,35 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
-from typing_extensions import Annotated
+from catalog_openapi.models.agent_env_var import AgentEnvVar
+from catalog_openapi.models.agent_image_artifact import AgentImageArtifact
 from catalog_openapi.models.metadata_value import MetadataValue
 from typing import Optional, Set
 from typing_extensions import Self
 
-class CatalogMetricsArtifact(BaseModel):
+class Agent(BaseModel):
     """
-    A metadata Artifact Entity.
+    An agent in the agent catalog.
     """ # noqa: E501
     custom_properties: Optional[Dict[str, MetadataValue]] = Field(default=None, description="User provided custom properties which are not defined by its type.", alias="customProperties")
-    description: Optional[StrictStr] = Field(default=None, description="An optional description about the resource.")
+    description: Optional[StrictStr] = Field(default=None, description="Short description of the agent.")
     external_id: Optional[StrictStr] = Field(default=None, description="The external id that come from the clients’ system. This field is optional. If set, it must be unique among all resources within a database instance.", alias="externalId")
-    name: Optional[Annotated[str, Field(min_length=1, strict=True)]] = Field(default=None, description="The client provided name of the artifact. This field is optional. If set, it must be unique among all the artifacts of the same artifact type within a database instance and cannot be changed once set.")
+    name: StrictStr = Field(description="Agent identifier. Must be unique within a source.")
     id: Optional[StrictStr] = Field(default=None, description="The unique server generated id of the resource.")
     create_time_since_epoch: Optional[StrictStr] = Field(default=None, description="Output only. Create time of the resource in millisecond since epoch.", alias="createTimeSinceEpoch")
     last_update_time_since_epoch: Optional[StrictStr] = Field(default=None, description="Output only. Last update time of the resource since epoch in millisecond since epoch.", alias="lastUpdateTimeSinceEpoch")
-    artifact_type: StrictStr = Field(alias="artifactType")
-    metrics_type: StrictStr = Field(alias="metricsType")
-    __properties: ClassVar[List[str]] = ["customProperties", "description", "externalId", "name", "id", "createTimeSinceEpoch", "lastUpdateTimeSinceEpoch", "artifactType", "metricsType"]
-
-    @field_validator('metrics_type')
-    def metrics_type_validate_enum(cls, value):
-        """Validates the enum"""
-        if value not in set(['performance-metrics', 'accuracy-metrics', 'security-metrics']):
-            raise ValueError("must be one of enum values ('performance-metrics', 'accuracy-metrics', 'security-metrics')")
-        return value
+    source_id: Optional[StrictStr] = Field(default=None, description="Catalog source that provides this entity.")
+    display_name: Optional[StrictStr] = Field(default=None, description="Human-readable display name.", alias="displayName")
+    readme: Optional[StrictStr] = Field(default=None, description="Full Markdown documentation.")
+    framework: Optional[StrictStr] = Field(default=None, description="Agent framework (e.g., langgraph, crewai, autogen).")
+    labels: Optional[List[StrictStr]] = Field(default=None, description="Labels for categorization and filtering.")
+    logo: Optional[StrictStr] = Field(default=None, description="URL or path to the agent logo image.")
+    repository_url: Optional[StrictStr] = Field(default=None, description="URL to the agent source code repository.", alias="repositoryUrl")
+    env: Optional[List[AgentEnvVar]] = Field(default=None, description="Environment variables required for deployment.")
+    artifacts: Optional[List[AgentImageArtifact]] = Field(default=None, description="OCI image artifacts for agent deployment.")
+    __properties: ClassVar[List[str]] = ["customProperties", "description", "externalId", "name", "id", "createTimeSinceEpoch", "lastUpdateTimeSinceEpoch", "source_id", "displayName", "readme", "framework", "labels", "logo", "repositoryUrl", "env", "artifacts"]
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -64,7 +65,7 @@ class CatalogMetricsArtifact(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of CatalogMetricsArtifact from a JSON string"""
+        """Create an instance of Agent from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -96,11 +97,25 @@ class CatalogMetricsArtifact(BaseModel):
                 if self.custom_properties[_key_custom_properties]:
                     _field_dict[_key_custom_properties] = self.custom_properties[_key_custom_properties].to_dict()
             _dict['customProperties'] = _field_dict
+        # override the default output from pydantic by calling `to_dict()` of each item in env (list)
+        _items = []
+        if self.env:
+            for _item_env in self.env:
+                if _item_env:
+                    _items.append(_item_env.to_dict())
+            _dict['env'] = _items
+        # override the default output from pydantic by calling `to_dict()` of each item in artifacts (list)
+        _items = []
+        if self.artifacts:
+            for _item_artifacts in self.artifacts:
+                if _item_artifacts:
+                    _items.append(_item_artifacts.to_dict())
+            _dict['artifacts'] = _items
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of CatalogMetricsArtifact from a dict"""
+        """Create an instance of Agent from a dict"""
         if obj is None:
             return None
 
@@ -120,7 +135,14 @@ class CatalogMetricsArtifact(BaseModel):
             "id": obj.get("id"),
             "createTimeSinceEpoch": obj.get("createTimeSinceEpoch"),
             "lastUpdateTimeSinceEpoch": obj.get("lastUpdateTimeSinceEpoch"),
-            "artifactType": obj.get("artifactType") if obj.get("artifactType") is not None else 'metrics-artifact',
-            "metricsType": obj.get("metricsType")
+            "source_id": obj.get("source_id"),
+            "displayName": obj.get("displayName"),
+            "readme": obj.get("readme"),
+            "framework": obj.get("framework"),
+            "labels": obj.get("labels"),
+            "logo": obj.get("logo"),
+            "repositoryUrl": obj.get("repositoryUrl"),
+            "env": [AgentEnvVar.from_dict(_item) for _item in obj["env"]] if obj.get("env") is not None else None,
+            "artifacts": [AgentImageArtifact.from_dict(_item) for _item in obj["artifacts"]] if obj.get("artifacts") is not None else None
         })
         return _obj

@@ -17,25 +17,20 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, field_validator
-from typing import Any, ClassVar, Dict, List
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
+from typing import Any, ClassVar, Dict, List, Optional
 from typing import Optional, Set
 from typing_extensions import Self
 
-class MetadataBoolValue(BaseModel):
+class ToolCallingConfig(BaseModel):
     """
-    A bool property value.
+    Tool-calling arguments for this model.
     """ # noqa: E501
-    bool_value: StrictBool
-    metadata_type: StrictStr = Field(alias="metadataType")
-    __properties: ClassVar[List[str]] = ["bool_value", "metadataType"]
-
-    @field_validator('metadata_type')
-    def metadata_type_validate_enum(cls, value):
-        """Validates the enum"""
-        if value not in set(['MetadataBoolValue']):
-            raise ValueError("must be one of enum values ('MetadataBoolValue')")
-        return value
+    tool_call_parser: Optional[StrictStr] = Field(default=None, description="The tool-call parser identifier for the serving runtime.", alias="toolCallParser")
+    chat_template: Optional[StrictStr] = Field(default=None, description="Path to the chat template file packaged with the model.", alias="chatTemplate")
+    enable_auto_tool_choice: Optional[StrictBool] = Field(default=True, description="Whether to enable automatic tool choice in the serving runtime.", alias="enableAutoToolChoice")
+    required_args: Optional[List[StrictStr]] = Field(default=None, description="Additional CLI arguments required for tool calling beyond the parser, template, and auto-tool-choice flags. Each entry is a complete argument (e.g., \"--config_format mistral\").", alias="requiredArgs")
+    __properties: ClassVar[List[str]] = ["toolCallParser", "chatTemplate", "enableAutoToolChoice", "requiredArgs"]
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -55,7 +50,7 @@ class MetadataBoolValue(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of MetadataBoolValue from a JSON string"""
+        """Create an instance of ToolCallingConfig from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -80,7 +75,7 @@ class MetadataBoolValue(BaseModel):
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of MetadataBoolValue from a dict"""
+        """Create an instance of ToolCallingConfig from a dict"""
         if obj is None:
             return None
 
@@ -88,7 +83,9 @@ class MetadataBoolValue(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "bool_value": obj.get("bool_value"),
-            "metadataType": obj.get("metadataType") if obj.get("metadataType") is not None else 'MetadataBoolValue'
+            "toolCallParser": obj.get("toolCallParser"),
+            "chatTemplate": obj.get("chatTemplate"),
+            "enableAutoToolChoice": obj.get("enableAutoToolChoice") if obj.get("enableAutoToolChoice") is not None else True,
+            "requiredArgs": obj.get("requiredArgs")
         })
         return _obj

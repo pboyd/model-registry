@@ -18,22 +18,17 @@ from enum import Enum
 from typing_extensions import Self
 
 
-class OrderByField(str, Enum):
+class AgentArtifactTypeQueryParam(str, Enum):
     """
-    Supported fields for ordering result entities.
+    Supported artifact types for querying agent artifacts.
     """
 
     """
     allowed enum values
     """
-    CREATE_TIME = 'CREATE_TIME'
-    LAST_UPDATE_TIME = 'LAST_UPDATE_TIME'
-    ID = 'ID'
-    NAME = 'NAME'
-    RECOMMENDED = 'RECOMMENDED'
-    ACCURACY = 'ACCURACY'
+    TEMPLATE_MINUS_ARTIFACT = 'template-artifact'
 
     @classmethod
     def from_json(cls, json_str: str) -> Self:
-        """Create an instance of OrderByField from a JSON string"""
+        """Create an instance of AgentArtifactTypeQueryParam from a JSON string"""
         return cls(json.loads(json_str))
