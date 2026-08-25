@@ -65,7 +65,7 @@ generate:
 	@echo "Generating Catalog API client from OpenAPI spec..."
 	@mkdir -p src/catalog_openapi
 	../../../bin/openapi-generator-cli generate \
-		-i ../../../api/openapi/catalog.yaml \
+		-i ../../../api/openapi/catalog-v1.yaml \
 		-g python \
 		-o src/ \
 		--package-name catalog_openapi \

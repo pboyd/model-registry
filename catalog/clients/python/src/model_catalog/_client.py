@@ -670,7 +670,6 @@ class CatalogAPIClient:
         )
         return response.to_dict()
 
-
     def get_named_queries(self, source: str | None = None) -> dict[str, Any]:
         """Get named queries.
 
