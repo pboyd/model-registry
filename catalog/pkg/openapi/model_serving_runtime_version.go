@@ -55,6 +55,8 @@ type ServingRuntimeVersion struct {
 	Deprecated *bool `json:"deprecated,omitempty"`
 	// Publication timestamp for this version/image.
 	PublishedDate *time.Time `json:"publishedDate,omitempty"`
+	// Full LLMInferenceServiceConfig manifest for this version, as a JSON-encoded string.
+	LlmInferenceServiceTemplate *string `json:"llmInferenceServiceTemplate,omitempty"`
 }
 
 type _ServingRuntimeVersion ServingRuntimeVersion
@@ -669,6 +671,38 @@ func (o *ServingRuntimeVersion) SetPublishedDate(v time.Time) {
 	o.PublishedDate = &v
 }
 
+// GetLlmInferenceServiceTemplate returns the LlmInferenceServiceTemplate field value if set, zero value otherwise.
+func (o *ServingRuntimeVersion) GetLlmInferenceServiceTemplate() string {
+	if o == nil || IsNil(o.LlmInferenceServiceTemplate) {
+		var ret string
+		return ret
+	}
+	return *o.LlmInferenceServiceTemplate
+}
+
+// GetLlmInferenceServiceTemplateOk returns a tuple with the LlmInferenceServiceTemplate field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ServingRuntimeVersion) GetLlmInferenceServiceTemplateOk() (*string, bool) {
+	if o == nil || IsNil(o.LlmInferenceServiceTemplate) {
+		return nil, false
+	}
+	return o.LlmInferenceServiceTemplate, true
+}
+
+// HasLlmInferenceServiceTemplate returns a boolean if a field has been set.
+func (o *ServingRuntimeVersion) HasLlmInferenceServiceTemplate() bool {
+	if o != nil && !IsNil(o.LlmInferenceServiceTemplate) {
+		return true
+	}
+
+	return false
+}
+
+// SetLlmInferenceServiceTemplate gets a reference to the given string and assigns it to the LlmInferenceServiceTemplate field.
+func (o *ServingRuntimeVersion) SetLlmInferenceServiceTemplate(v string) {
+	o.LlmInferenceServiceTemplate = &v
+}
+
 func (o ServingRuntimeVersion) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -729,6 +763,9 @@ func (o ServingRuntimeVersion) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.PublishedDate) {
 		toSerialize["publishedDate"] = o.PublishedDate
+	}
+	if !IsNil(o.LlmInferenceServiceTemplate) {
+		toSerialize["llmInferenceServiceTemplate"] = o.LlmInferenceServiceTemplate
 	}
 	return toSerialize, nil
 }

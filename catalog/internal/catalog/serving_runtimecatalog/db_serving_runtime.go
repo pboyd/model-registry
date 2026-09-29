@@ -427,6 +427,8 @@ func mapDBServingRuntimeVersionToAPI(m models.ServingRuntimeVersion) (openapi.Se
 				}
 			case "template":
 				res.Template = prop.StringValue
+			case "llmInferenceServiceTemplate":
+				res.LlmInferenceServiceTemplate = prop.StringValue
 			case "deprecated":
 				if prop.BoolValue != nil {
 					res.Deprecated = prop.BoolValue

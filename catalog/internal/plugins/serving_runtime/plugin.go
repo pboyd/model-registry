@@ -69,6 +69,7 @@ func (p *Plugin) DatastoreEntries() []plugin.DatastoreEntry {
 				AddStruct("defaultArgs").
 				AddStruct("env").
 				AddString("template").
+				AddString("llmInferenceServiceTemplate").
 				AddBoolean("deprecated").
 				AddString("publishedDate"),
 		},

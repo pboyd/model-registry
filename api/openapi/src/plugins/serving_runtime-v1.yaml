@@ -279,6 +279,10 @@ components:
               type: string
               format: date-time
               description: Publication timestamp for this version/image.
+            llmInferenceServiceTemplate:
+              type: string
+              description: >-
+                Full LLMInferenceServiceConfig manifest for this version, as a JSON-encoded string.
 
     SupportedModelFormat:
       description: A model format a runtime can serve. Maps to ServingRuntime.spec.supportedModelFormats[].

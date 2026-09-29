@@ -325,6 +325,7 @@ func (l *ServingRuntimeLoader) buildServingRuntimeVersionEntity(sourceID, runtim
 		properties = append(properties, mrmodels.NewStringProperty("supportLevel", string(*version.SupportLevel), false))
 	}
 	addString("template", version.Template)
+	addString("llmInferenceServiceTemplate", version.LlmInferenceServiceTemplate)
 	addString("publishedDate", version.PublishedDate)
 	deprecated := false
 	if version.Deprecated != nil {

@@ -2842,6 +2842,10 @@ components:
               type: string
               format: date-time
               description: Publication timestamp for this version/image.
+            llmInferenceServiceTemplate:
+              type: string
+              description: >-
+                Full LLMInferenceServiceConfig manifest for this version, as a JSON-encoded string.
     ServingRuntimeVersionList:
       description: A list of serving_runtime_version entities.
       allOf:

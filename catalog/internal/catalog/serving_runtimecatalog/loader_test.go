@@ -114,6 +114,28 @@ func TestServingRuntimeLoaderReloadAndValidation(t *testing.T) {
 	assert.Equal(t, after.GetID(), retained.GetID())
 }
 
+func TestServingRuntimeVersionLLMInferenceServiceTemplateRoundTrip(t *testing.T) {
+	_, services := setupServingRuntimeLoader(t)
+	dir := t.TempDir()
+	dataPath := filepath.Join(dir, "runtimes.yaml")
+	configPath := filepath.Join(dir, "sources.yaml")
+	writeRuntimeFile(t, configPath, "serving_runtime_catalogs:\n  - {id: first, type: yaml, properties: {yamlCatalogPath: runtimes.yaml}}\n")
+	writeRuntimeFile(t, dataPath, "serving_runtimes:\n  - name: vllm\n    versions:\n      - version: '1'\n        image: example:v1\n        llmInferenceServiceTemplate: '{\"apiVersion\":\"serving.kserve.io/v1alpha1\"}'\n")
+	state := basecatalog.NewBaseLoader([]string{configPath})
+	loader := NewServingRuntimeLoader(services, state)
+	require.NoError(t, loader.ParseAllConfigs())
+	state.SetLeader(true)
+	require.NoError(t, loader.loadFromYAML(t.Context(), "first", loader.Sources.AllSources()["first"]))
+	runtime, err := services.ServingRuntimeRepository.GetByName("first:vllm")
+	require.NoError(t, err)
+
+	versions, err := NewDBServingRuntimeCatalog(services, loader.Sources).ListServingRuntimeVersions(t.Context(), strconv.FormatInt(int64(*runtime.GetID()), 10), ListServingRuntimeVersionsParams{})
+	require.NoError(t, err)
+	require.Len(t, versions.Items, 1)
+	require.NotNil(t, versions.Items[0].LlmInferenceServiceTemplate)
+	assert.Equal(t, `{"apiVersion":"serving.kserve.io/v1alpha1"}`, *versions.Items[0].LlmInferenceServiceTemplate)
+}
+
 func TestServingRuntimeLoaderSourceCleanup(t *testing.T) {
 	_, services := setupServingRuntimeLoader(t)
 	dir := t.TempDir()
