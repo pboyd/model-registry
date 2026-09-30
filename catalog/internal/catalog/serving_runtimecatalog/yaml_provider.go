@@ -48,7 +48,7 @@ type yamlServingRuntimeVersion struct {
 	RecommendedResources        *openapi.ServingRuntimeResourceRecommendation `yaml:"recommendedResources,omitempty" json:"recommendedResources,omitempty"`
 	DefaultArgs                 []string                                      `yaml:"defaultArgs,omitempty" json:"defaultArgs,omitempty"`
 	Env                         []openapi.ServingRuntimeEnvVar                `yaml:"env,omitempty" json:"env,omitempty"`
-	Template                    *string                                       `yaml:"template,omitempty" json:"template,omitempty"`
+	ServingRuntimeTemplate      *string                                       `yaml:"servingRuntimeTemplate,omitempty" json:"servingRuntimeTemplate,omitempty"`
 	LlmInferenceServiceTemplate *string                                       `yaml:"llmInferenceServiceTemplate,omitempty" json:"llmInferenceServiceTemplate,omitempty"`
 	Deprecated                  *bool                                         `yaml:"deprecated,omitempty" json:"deprecated,omitempty"`
 	PublishedDate               *string                                       `yaml:"publishedDate,omitempty" json:"publishedDate,omitempty"`

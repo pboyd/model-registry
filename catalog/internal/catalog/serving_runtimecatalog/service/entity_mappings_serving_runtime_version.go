@@ -47,7 +47,7 @@ var servingRuntimeVersionProperties = map[string]filter.PropertyDefinition{
 	"recommendedResources":        {Location: filter.PropertyTable, ValueType: filter.StringValueType, Column: "recommendedResources"},
 	"defaultArgs":                 {Location: filter.PropertyTable, ValueType: filter.ArrayValueType, Column: "defaultArgs"},
 	"env":                         {Location: filter.PropertyTable, ValueType: filter.ArrayValueType, Column: "env"},
-	"template":                    {Location: filter.PropertyTable, ValueType: filter.StringValueType, Column: "template"},
+	"servingRuntimeTemplate":      {Location: filter.PropertyTable, ValueType: filter.StringValueType, Column: "servingRuntimeTemplate"},
 	"llmInferenceServiceTemplate": {Location: filter.PropertyTable, ValueType: filter.StringValueType, Column: "llmInferenceServiceTemplate"},
 	"deprecated":                  {Location: filter.PropertyTable, ValueType: filter.BoolValueType, Column: "deprecated"},
 	"publishedDate":               {Location: filter.PropertyTable, ValueType: filter.StringValueType, Column: "publishedDate"},

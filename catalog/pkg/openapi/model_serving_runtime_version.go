@@ -50,7 +50,7 @@ type ServingRuntimeVersion struct {
 	// Environment variables the runtime accepts (discovery hints; no secret values).
 	Env []ServingRuntimeEnvVar `json:"env,omitempty"`
 	// Optional full ServingRuntime (KServe v1alpha1) manifest for this version, as a JSON-encoded string, ready for review/edit before creation. If omitted, the consumer generates the manifest from the fields above.
-	Template *string `json:"template,omitempty"`
+	ServingRuntimeTemplate *string `json:"servingRuntimeTemplate,omitempty"`
 	// Whether this version is deprecated and should be de-emphasized in the UI.
 	Deprecated *bool `json:"deprecated,omitempty"`
 	// Publication timestamp for this version/image.
@@ -575,36 +575,36 @@ func (o *ServingRuntimeVersion) SetEnv(v []ServingRuntimeEnvVar) {
 	o.Env = v
 }
 
-// GetTemplate returns the Template field value if set, zero value otherwise.
-func (o *ServingRuntimeVersion) GetTemplate() string {
-	if o == nil || IsNil(o.Template) {
+// GetServingRuntimeTemplate returns the ServingRuntimeTemplate field value if set, zero value otherwise.
+func (o *ServingRuntimeVersion) GetServingRuntimeTemplate() string {
+	if o == nil || IsNil(o.ServingRuntimeTemplate) {
 		var ret string
 		return ret
 	}
-	return *o.Template
+	return *o.ServingRuntimeTemplate
 }
 
-// GetTemplateOk returns a tuple with the Template field value if set, nil otherwise
+// GetServingRuntimeTemplateOk returns a tuple with the ServingRuntimeTemplate field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ServingRuntimeVersion) GetTemplateOk() (*string, bool) {
-	if o == nil || IsNil(o.Template) {
+func (o *ServingRuntimeVersion) GetServingRuntimeTemplateOk() (*string, bool) {
+	if o == nil || IsNil(o.ServingRuntimeTemplate) {
 		return nil, false
 	}
-	return o.Template, true
+	return o.ServingRuntimeTemplate, true
 }
 
-// HasTemplate returns a boolean if a field has been set.
-func (o *ServingRuntimeVersion) HasTemplate() bool {
-	if o != nil && !IsNil(o.Template) {
+// HasServingRuntimeTemplate returns a boolean if a field has been set.
+func (o *ServingRuntimeVersion) HasServingRuntimeTemplate() bool {
+	if o != nil && !IsNil(o.ServingRuntimeTemplate) {
 		return true
 	}
 
 	return false
 }
 
-// SetTemplate gets a reference to the given string and assigns it to the Template field.
-func (o *ServingRuntimeVersion) SetTemplate(v string) {
-	o.Template = &v
+// SetServingRuntimeTemplate gets a reference to the given string and assigns it to the ServingRuntimeTemplate field.
+func (o *ServingRuntimeVersion) SetServingRuntimeTemplate(v string) {
+	o.ServingRuntimeTemplate = &v
 }
 
 // GetDeprecated returns the Deprecated field value if set, zero value otherwise.
@@ -755,8 +755,8 @@ func (o ServingRuntimeVersion) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.Env) {
 		toSerialize["env"] = o.Env
 	}
-	if !IsNil(o.Template) {
-		toSerialize["template"] = o.Template
+	if !IsNil(o.ServingRuntimeTemplate) {
+		toSerialize["servingRuntimeTemplate"] = o.ServingRuntimeTemplate
 	}
 	if !IsNil(o.Deprecated) {
 		toSerialize["deprecated"] = o.Deprecated
