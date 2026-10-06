@@ -146,6 +146,9 @@ func (l *ServingRuntimeLoader) loadYAML(ctx context.Context, sourceID string, so
 	if err := l.checkWrite(ctx); err != nil {
 		return outcome, err
 	}
+	if l.services.WithRuntimeFamilyTransaction == nil {
+		return outcome, errors.New("serving runtime family transaction support is required")
+	}
 	yamlPath, ok := source.Properties[yamlServingRuntimeCatalogPathKey].(string)
 	if !ok || yamlPath == "" {
 		return outcome, fmt.Errorf("%s property is required for YAML serving_runtime provider", yamlServingRuntimeCatalogPathKey)
@@ -193,55 +196,17 @@ func (l *ServingRuntimeLoader) loadYAML(ctx context.Context, sourceID string, so
 			continue
 		}
 		glog.Infof("Loading serving runtime %s from source %s with %d version(s)", entry.Name, sourceID, len(entry.Versions))
-		if existing, err := l.services.ServingRuntimeRepository.GetByName(qualifiedName); err == nil {
-			entity.SetID(*existing.GetID())
-			entity.GetAttributes().CreateTimeSinceEpoch = existing.GetAttributes().CreateTimeSinceEpoch
-		} else if !errors.Is(err, servingRuntimeservice.ErrServingRuntimeNotFound) {
-			outcome.reject(identifier, fmt.Errorf("failed to look up serving_runtime %q: %w", entry.Name, err))
-			continue
-		}
-		if err := l.checkWrite(ctx); err != nil {
-			return outcome, err
-		}
-		saved, err := l.services.ServingRuntimeRepository.Save(entity)
+		err = l.services.WithRuntimeFamilyTransaction(ctx, func(runtimeRepo servingRuntimemodels.ServingRuntimeRepository, versionRepo servingRuntimemodels.ServingRuntimeVersionRepository) error {
+			return l.saveRuntimeFamily(ctx, sourceID, entry, entity, runtimeRepo, versionRepo)
+		})
 		if err != nil {
-			outcome.reject(identifier, fmt.Errorf("failed to save serving_runtime %q: %w", entry.Name, err))
+			if ctx.Err() != nil || errors.Is(err, errServingRuntimeLeadershipLost) {
+				return outcome, err
+			}
+			outcome.reject(identifier, err)
 			continue
 		}
 		outcome.Changed = true
-		parentID := saved.GetID()
-		validVersions := mapset.NewSet[string]()
-		versionsSaved := true
-		for _, version := range entry.Versions {
-			if err := l.checkWrite(ctx); err != nil {
-				return outcome, err
-			}
-			versionEntity := l.buildServingRuntimeVersionEntity(sourceID, entry.Name, version)
-			versionName := *versionEntity.GetAttributes().Name
-			validVersions.Add(versionName)
-			if existing, err := l.services.ServingRuntimeVersionRepository.GetByName(versionName); err == nil {
-				versionEntity.SetID(*existing.GetID())
-				versionEntity.GetAttributes().CreateTimeSinceEpoch = existing.GetAttributes().CreateTimeSinceEpoch
-			} else if !errors.Is(err, servingRuntimeservice.ErrServingRuntimeVersionNotFound) {
-				outcome.reject(identifier, fmt.Errorf("failed to look up serving_runtime version %q: %w", versionName, err))
-				versionsSaved = false
-				break
-			}
-			if err := l.checkWrite(ctx); err != nil {
-				return outcome, err
-			}
-			if _, err := l.services.ServingRuntimeVersionRepository.Save(versionEntity, parentID); err != nil {
-				outcome.reject(identifier, fmt.Errorf("failed to save serving_runtime version %q for %q: %w", version.Version, entry.Name, err))
-				versionsSaved = false
-				break
-			}
-		}
-		if !versionsSaved {
-			continue
-		}
-		if err := l.removeOrphanedVersions(ctx, *parentID, validVersions); err != nil {
-			return outcome, err
-		}
 		outcome.SuccessfulRuntimes++
 	}
 	if err := l.checkWrite(ctx); err != nil {
@@ -261,6 +226,50 @@ func (l *ServingRuntimeLoader) loadYAML(ctx context.Context, sourceID string, so
 	}
 	glog.Infof("%s: loaded %d serving runtimes, rejected or failed %d", sourceID, outcome.SuccessfulRuntimes, len(outcome.FailedRuntimeIDs))
 	return outcome, nil
+}
+
+// saveRuntimeFamily performs every family database operation through transaction-bound repositories.
+func (l *ServingRuntimeLoader) saveRuntimeFamily(ctx context.Context, sourceID string, entry yamlServingRuntime, entity servingRuntimemodels.ServingRuntime, runtimeRepo servingRuntimemodels.ServingRuntimeRepository, versionRepo servingRuntimemodels.ServingRuntimeVersionRepository) error {
+	qualifiedName := sourceID + ":" + entry.Name
+	if existing, err := runtimeRepo.GetByName(qualifiedName); err == nil {
+		entity.SetID(*existing.GetID())
+		entity.GetAttributes().CreateTimeSinceEpoch = existing.GetAttributes().CreateTimeSinceEpoch
+	} else if !errors.Is(err, servingRuntimeservice.ErrServingRuntimeNotFound) {
+		return fmt.Errorf("failed to look up serving_runtime %q: %w", entry.Name, err)
+	}
+	if err := l.checkWrite(ctx); err != nil {
+		return err
+	}
+	saved, err := runtimeRepo.Save(entity)
+	if err != nil {
+		return fmt.Errorf("failed to save serving_runtime %q: %w", entry.Name, err)
+	}
+	parentID := saved.GetID()
+	validVersions := mapset.NewSet[string]()
+	for _, version := range entry.Versions {
+		if err := l.checkWrite(ctx); err != nil {
+			return err
+		}
+		versionEntity := l.buildServingRuntimeVersionEntity(sourceID, entry.Name, version)
+		versionName := *versionEntity.GetAttributes().Name
+		validVersions.Add(versionName)
+		if existing, err := versionRepo.GetByName(versionName); err == nil {
+			versionEntity.SetID(*existing.GetID())
+			versionEntity.GetAttributes().CreateTimeSinceEpoch = existing.GetAttributes().CreateTimeSinceEpoch
+		} else if !errors.Is(err, servingRuntimeservice.ErrServingRuntimeVersionNotFound) {
+			return fmt.Errorf("failed to look up serving_runtime version %q: %w", versionName, err)
+		}
+		if err := l.checkWrite(ctx); err != nil {
+			return err
+		}
+		if _, err := versionRepo.Save(versionEntity, parentID); err != nil {
+			return fmt.Errorf("failed to save serving_runtime version %q for %q: %w", version.Version, entry.Name, err)
+		}
+	}
+	if err := l.removeOrphanedVersions(ctx, versionRepo, *parentID, validVersions); err != nil {
+		return err
+	}
+	return l.checkWrite(ctx)
 }
 
 // buildServingRuntimeEntity converts a YAML entry into a persistable domain entity.
@@ -616,7 +625,7 @@ func (l *ServingRuntimeLoader) removeRuntimesFromMissingSources(allKnownSourceID
 	return basecatalog.CleanupOrphanedCatalogSources(l.services.CatalogSourceRepository, configured.Union(allKnownSourceIDs))
 }
 
-func (l *ServingRuntimeLoader) removeOrphanedVersions(ctx context.Context, parentID int32, valid mapset.Set[string]) error {
+func (l *ServingRuntimeLoader) removeOrphanedVersions(ctx context.Context, versionRepo servingRuntimemodels.ServingRuntimeVersionRepository, parentID int32, valid mapset.Set[string]) error {
 	pageSize := int32(100)
 	options := &servingRuntimemodels.ServingRuntimeVersionListOptions{ParentResourceID: &parentID}
 	options.PageSize = &pageSize
@@ -624,7 +633,7 @@ func (l *ServingRuntimeLoader) removeOrphanedVersions(ctx context.Context, paren
 		if err := l.checkWrite(ctx); err != nil {
 			return err
 		}
-		list, err := l.services.ServingRuntimeVersionRepository.List(options)
+		list, err := versionRepo.List(options)
 		if err != nil {
 			return fmt.Errorf("listing versions for serving_runtime %d: %w", parentID, err)
 		}
@@ -636,7 +645,7 @@ func (l *ServingRuntimeLoader) removeOrphanedVersions(ctx context.Context, paren
 				if err := l.checkWrite(ctx); err != nil {
 					return err
 				}
-				if err := l.services.ServingRuntimeVersionRepository.DeleteByID(*version.GetID()); err != nil {
+				if err := versionRepo.DeleteByID(*version.GetID()); err != nil {
 					return err
 				}
 				glog.Infof("Removed orphaned serving runtime version %s", *attrs.Name)

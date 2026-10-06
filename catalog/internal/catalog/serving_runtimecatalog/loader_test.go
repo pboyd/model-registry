@@ -97,9 +97,11 @@ func TestServingRuntimeLoaderReloadAndValidation(t *testing.T) {
 	after, err := services.ServingRuntimeRepository.GetByName("first:vllm")
 	require.NoError(t, err)
 	assert.Equal(t, before.GetID(), after.GetID())
+	assert.Equal(t, before.GetAttributes().CreateTimeSinceEpoch, after.GetAttributes().CreateTimeSinceEpoch)
 	versionAfter, err := services.ServingRuntimeVersionRepository.GetByName("first:vllm:1")
 	require.NoError(t, err)
 	assert.Equal(t, versionBefore.GetID(), versionAfter.GetID())
+	assert.Equal(t, versionBefore.GetAttributes().CreateTimeSinceEpoch, versionAfter.GetAttributes().CreateTimeSinceEpoch)
 	apiRuntime, err = NewDBServingRuntimeCatalog(services, loader.Sources).GetServingRuntime(t.Context(), strconv.FormatInt(int64(*after.GetID()), 10))
 	require.NoError(t, err)
 	assert.Nil(t, apiRuntime.DisplayName)
@@ -107,6 +109,7 @@ func TestServingRuntimeLoaderReloadAndValidation(t *testing.T) {
 	versionAPI, err = NewDBServingRuntimeCatalog(services, loader.Sources).ListServingRuntimeVersions(t.Context(), strconv.FormatInt(int64(*after.GetID()), 10), ListServingRuntimeVersionsParams{})
 	require.NoError(t, err)
 	require.Len(t, versionAPI.Items, 1)
+	assert.Equal(t, "example:new", versionAPI.Items[0].Image)
 	assert.Nil(t, versionAPI.Items[0].SupportLevel)
 	require.Len(t, runtimeVersions(t, services, *after.GetID()), 1)
 	_, err = services.ServingRuntimeRepository.GetByName("first:ovms")
@@ -810,7 +813,7 @@ func TestRemoveOrphanedVersionsPaginatesAcrossPages(t *testing.T) {
 	loader := NewServingRuntimeLoader(services, state)
 
 	runWithTimeout(t, 15*time.Second, func() error {
-		return loader.removeOrphanedVersions(t.Context(), *runtime.GetID(), valid)
+		return loader.removeOrphanedVersions(t.Context(), services.ServingRuntimeVersionRepository, *runtime.GetID(), valid)
 	})
 
 	assert.Len(t, runtimeVersions(t, services, *runtime.GetID()), total, "no valid versions should have been removed")
@@ -990,6 +993,25 @@ func TestServingRuntimeWatcherPartialFailureAndRecovery(t *testing.T) {
 	waitStatus(basecatalog.SourceStatusAvailable)
 }
 
+// bindRuntimeTransactionRepositories keeps failure injection inside real database transactions.
+func bindRuntimeTransactionRepositories(services Services) Services {
+	run := services.WithRuntimeFamilyTransaction
+	services.WithRuntimeFamilyTransaction = func(ctx context.Context, operation func(models.ServingRuntimeRepository, models.ServingRuntimeVersionRepository) error) error {
+		return run(ctx, func(runtimeRepo models.ServingRuntimeRepository, versionRepo models.ServingRuntimeVersionRepository) error {
+			if failing, ok := services.ServingRuntimeRepository.(failingRuntimeRepository); ok {
+				failing.ServingRuntimeRepository = runtimeRepo
+				runtimeRepo = failing
+			}
+			if failing, ok := services.ServingRuntimeVersionRepository.(failingVersionRepository); ok {
+				failing.ServingRuntimeVersionRepository = versionRepo
+				versionRepo = failing
+			}
+			return operation(runtimeRepo, versionRepo)
+		})
+	}
+	return services
+}
+
 type failingRuntimeRepository struct {
 	models.ServingRuntimeRepository
 	lookupName string
@@ -1023,8 +1045,11 @@ func (r failingRuntimeRepository) List(options *models.ServingRuntimeListOptions
 
 type failingVersionRepository struct {
 	models.ServingRuntimeVersionRepository
-	lookupName string
-	saveName   string
+	lookupName   string
+	saveName     string
+	failParentID int32
+	failDeleteID int32
+	afterList    func()
 }
 
 func (r failingVersionRepository) GetByName(name string) (models.ServingRuntimeVersion, error) {
@@ -1040,19 +1065,38 @@ func (r failingVersionRepository) Save(entity models.ServingRuntimeVersion, pare
 	return r.ServingRuntimeVersionRepository.Save(entity, parentID)
 }
 
+func (r failingVersionRepository) List(options *models.ServingRuntimeVersionListOptions) (*mrmodels.ListWrapper[models.ServingRuntimeVersion], error) {
+	if options.ParentResourceID != nil && *options.ParentResourceID == r.failParentID {
+		return nil, errors.New("injected version cleanup list failure")
+	}
+	list, err := r.ServingRuntimeVersionRepository.List(options)
+	if r.afterList != nil {
+		r.afterList()
+	}
+	return list, err
+}
+
+func (r failingVersionRepository) DeleteByID(id int32) error {
+	if id == r.failDeleteID {
+		return errors.New("injected version cleanup delete failure")
+	}
+	return r.ServingRuntimeVersionRepository.DeleteByID(id)
+}
+
 func TestServingRuntimePersistenceFailuresContinueAndPreserveFailedEntries(t *testing.T) {
-	for _, failure := range []string{"runtime lookup", "runtime save", "version lookup", "version save"} {
+	for _, failure := range []string{"runtime lookup", "runtime save", "version lookup", "version save", "version cleanup list", "version cleanup delete"} {
 		t.Run(failure, func(t *testing.T) {
-			_, services := setupServingRuntimeLoader(t)
+			db, services := setupServingRuntimeLoader(t)
 			path := filepath.Join(t.TempDir(), "runtimes.yaml")
 			state := basecatalog.NewBaseLoader(nil)
 			state.SetLeader(true)
 			loader := NewServingRuntimeLoader(services, state)
 			source := basecatalog.PluginSource{Properties: map[string]any{yamlServingRuntimeCatalogPathKey: path}}
-			writeRuntimeFile(t, path, "serving_runtimes:\n  - name: failed\n    versions: [{version: 'old', image: old:1}, {version: 'stale', image: old:2}]\n  - name: absent\n")
+			writeRuntimeFile(t, path, "serving_runtimes:\n  - name: failed\n    displayName: Original\n    customProperties: {owner: {metadataType: MetadataStringValue, string_value: original}}\n    versions: [{version: 'old', image: old:1}, {version: 'stale', image: old:2}, {version: 'stale2', image: old:3}]\n  - name: absent\n")
 			require.NoError(t, loader.loadFromYAML(t.Context(), "first", source))
 			failed, err := services.ServingRuntimeRepository.GetByName("first:failed")
 			require.NoError(t, err)
+			before := snapshotRuntimeFamily(t, db, *failed.GetID())
 			runtimeRepo := failingRuntimeRepository{ServingRuntimeRepository: services.ServingRuntimeRepository}
 			versionRepo := failingVersionRepository{ServingRuntimeVersionRepository: services.ServingRuntimeVersionRepository}
 			switch failure {
@@ -1064,23 +1108,37 @@ func TestServingRuntimePersistenceFailuresContinueAndPreserveFailedEntries(t *te
 				versionRepo.lookupName = "first:failed:broken"
 			case "version save":
 				versionRepo.saveName = "first:failed:broken"
+			case "version cleanup list":
+				versionRepo.failParentID = *failed.GetID()
+			case "version cleanup delete":
+				version, err := services.ServingRuntimeVersionRepository.GetByName("first:failed:stale2")
+				require.NoError(t, err)
+				versionRepo.failDeleteID = *version.GetID()
 			}
 			loader.services.ServingRuntimeRepository = runtimeRepo
 			loader.services.ServingRuntimeVersionRepository = versionRepo
-			writeRuntimeFile(t, path, "serving_runtimes:\n  - name: before\n  - name: failed\n    versions: [{version: 'new', image: new:1}, {version: 'broken', image: new:2}]\n  - name: after\n")
-			require.Error(t, loader.loadFromYAML(t.Context(), "first", source))
+			loader.services = bindRuntimeTransactionRepositories(loader.services)
+			writeRuntimeFile(t, path, "serving_runtimes:\n  - name: before\n  - name: failed\n    displayName: Updated\n    versions: [{version: 'old', image: updated:1}, {version: 'new', image: new:1}, {version: 'broken', image: new:2}]\n  - name: after\n")
+			outcome, err := loader.loadYAML(t.Context(), "first", source)
+			require.NoError(t, err)
+			assert.Equal(t, 2, outcome.SuccessfulRuntimes)
+			assert.Equal(t, []string{"first:failed"}, outcome.FailedRuntimeIDs)
+			assert.Equal(t, basecatalog.SourceStatusPartiallyAvailable, outcome.status(err))
+			assert.Equal(t, before, snapshotRuntimeFamily(t, db, *failed.GetID()))
+			_, err = services.ServingRuntimeRepository.GetByName("first:before")
+			require.NoError(t, err)
 			_, err = services.ServingRuntimeRepository.GetByName("first:after")
 			require.NoError(t, err, "persistence errors must allow later runtimes to load")
 			_, err = services.ServingRuntimeRepository.GetByName("first:failed")
 			require.NoError(t, err)
-			for _, name := range []string{"old", "stale"} {
+			for _, name := range []string{"old", "stale", "stale2"} {
 				_, err = services.ServingRuntimeVersionRepository.GetByName("first:failed:" + name)
 				require.NoError(t, err, "failed runtimes must not clean up their existing versions")
 			}
-			if failure == "version lookup" || failure == "version save" {
-				versions := runtimeVersions(t, services, *failed.GetID())
-				assert.Len(t, versions, 3, "earlier individual saves remain committed")
-			}
+			versions := runtimeVersions(t, services, *failed.GetID())
+			assert.Len(t, versions, 3, "failed families must roll back earlier version saves")
+			_, err = services.ServingRuntimeVersionRepository.GetByName("first:failed:new")
+			require.ErrorIs(t, err, runtimeservice.ErrServingRuntimeVersionNotFound)
 			_, err = services.ServingRuntimeRepository.GetByName("first:absent")
 			require.ErrorIs(t, err, runtimeservice.ErrServingRuntimeNotFound)
 		})
@@ -1110,12 +1168,15 @@ func TestServingRuntimeInterruptedLoadSkipsCleanup(t *testing.T) {
 					}
 				},
 			}
+			loader.services = bindRuntimeTransactionRepositories(loader.services)
 			writeRuntimeFile(t, path, "serving_runtimes:\n  - name: current\n")
 			require.Error(t, loader.loadFromYAML(ctx, "first", source), "interrupted loading must not report success")
 			_, err := services.ServingRuntimeRepository.GetByName("first:absent")
 			require.NoError(t, err)
 			_, err = services.ServingRuntimeVersionRepository.GetByName("first:absent:1")
 			require.NoError(t, err)
+			_, err = services.ServingRuntimeRepository.GetByName("first:current")
+			require.ErrorIs(t, err, runtimeservice.ErrServingRuntimeNotFound, "interruption must roll back a new family")
 		})
 	}
 }
@@ -1127,7 +1188,7 @@ func TestServingRuntimeWatcherCleanupFailureReportsError(t *testing.T) {
 	state := basecatalog.NewBaseLoader(nil)
 	state.SetLeader(true)
 	services.ServingRuntimeRepository = failingRuntimeRepository{ServingRuntimeRepository: services.ServingRuntimeRepository, failList: true}
-	loader := NewServingRuntimeLoader(services, state)
+	loader := NewServingRuntimeLoader(bindRuntimeTransactionRepositories(services), state)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	state.TrackWrite()
@@ -1167,7 +1228,7 @@ func TestServingRuntimeWatcherInterruptionDoesNotPublishSuccess(t *testing.T) {
 				},
 			}
 			basecatalog.SaveSourceStatus(services.CatalogSourceRepository, "interrupted", basecatalog.SourceStatusError, "previous failure")
-			loader := NewServingRuntimeLoader(services, state)
+			loader := NewServingRuntimeLoader(bindRuntimeTransactionRepositories(services), state)
 			state.TrackWrite()
 			done := make(chan struct{})
 			go func() {
@@ -1180,6 +1241,8 @@ func TestServingRuntimeWatcherInterruptionDoesNotPublishSuccess(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, basecatalog.SourceStatusError, status.Status)
 			assert.Equal(t, "previous failure", status.Error)
+			_, err = services.ServingRuntimeRepository.GetByName("interrupted:good")
+			require.ErrorIs(t, err, runtimeservice.ErrServingRuntimeNotFound)
 		})
 	}
 }
@@ -1222,14 +1285,14 @@ func TestServingRuntimeWatcherLeadershipFlapDoesNotPublishStatus(t *testing.T) {
 	writeRuntimeFile(t, path, "serving_runtimes:\n  - name: good\n")
 	state := &flappingLeaderState{BaseLoader: basecatalog.NewBaseLoader(nil)}
 	state.SetLeader(true)
-	// Arm the flap once the runtime save commits, so the trip lands on the next
+	// Arm the flap after the runtime save, so the trip lands on the next
 	// checkWrite (in the version loop) rather than before any work is done.
 	services.ServingRuntimeRepository = failingRuntimeRepository{
 		ServingRuntimeRepository: services.ServingRuntimeRepository,
 		afterSave:                state.arm,
 	}
 	basecatalog.SaveSourceStatus(services.CatalogSourceRepository, "flapping", basecatalog.SourceStatusAvailable, "")
-	loader := NewServingRuntimeLoader(services, state)
+	loader := NewServingRuntimeLoader(bindRuntimeTransactionRepositories(services), state)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	state.TrackWrite()
@@ -1245,5 +1308,5 @@ func TestServingRuntimeWatcherLeadershipFlapDoesNotPublishStatus(t *testing.T) {
 	assert.Equal(t, basecatalog.SourceStatusAvailable, status.Status, "a transient leadership flap must not overwrite the prior status")
 	assert.Empty(t, status.Error, "a transient leadership flap must not record a spurious error")
 	_, err = services.ServingRuntimeRepository.GetByName("flapping:good")
-	require.NoError(t, err, "the load itself should have succeeded up to the point the flap was detected")
+	require.ErrorIs(t, err, runtimeservice.ErrServingRuntimeNotFound, "leadership loss must roll back the active family")
 }
