@@ -34,7 +34,7 @@ _PATH_PROPERTIES: dict[str, set[str]] = {
     "/api/model_registry/v1/inference_services/{inference_service_id}": {"customProperties", "description", "desiredState", "externalId", "modelVersionId", "runtime"},
     "/api/model_registry/v1/inference_services/{inference_service_id}/serves": {"customProperties", "description", "externalId", "lastKnownState", "modelVersionId", "name"},
     "/api/model_registry/v1/model_artifacts": {"artifactType", "customProperties", "description", "externalId", "modelFormatName", "modelFormatVersion", "modelSourceClass", "modelSourceGroup", "modelSourceId", "modelSourceKind", "modelSourceName", "name", "serviceAccountName", "state", "storageKey", "storagePath", "uri"},
-    "/api/model_registry/v1/model_artifacts/{modelartifactId}": {"artifactType", "customProperties", "description", "externalId", "modelFormatName", "modelFormatVersion", "modelSourceClass", "modelSourceGroup", "modelSourceId", "modelSourceKind", "modelSourceName", "serviceAccountName", "state", "storageKey", "storagePath", "uri"},
+    "/api/model_registry/v1/model_artifacts/{model_artifact_id}": {"artifactType", "customProperties", "description", "externalId", "modelFormatName", "modelFormatVersion", "modelSourceClass", "modelSourceGroup", "modelSourceId", "modelSourceKind", "modelSourceName", "serviceAccountName", "state", "storageKey", "storagePath", "uri"},
     "/api/model_registry/v1/model_versions": {"author", "customProperties", "description", "externalId", "name", "registeredModelId", "state"},
     "/api/model_registry/v1/model_versions/{model_version_id}": {"author", "customProperties", "description", "externalId", "state"},
     "/api/model_registry/v1/model_versions/{model_version_id}/artifacts": {"artifactType", "customProperties", "description", "digest", "experimentId", "experimentRunId", "externalId", "modelFormatName", "modelFormatVersion", "modelSourceClass", "modelSourceGroup", "modelSourceId", "modelSourceKind", "modelSourceName", "name", "parameterType", "profile", "schema", "serviceAccountName", "source", "sourceType", "state", "step", "storageKey", "storagePath", "timestamp", "uri", "value"},
@@ -77,7 +77,7 @@ def map_body(context: Any, body: Any) -> Any:
     properties here instead. We resolve allowed properties from the spec per-schema.
     """
     body = _sanitize_strings(body)
-    if isinstance(body, dict):
+    if isinstance(body, dict) and context.operation is not None and context.operation.path.startswith("/api/model_registry/"):
         body = _sanitize_body_dict(context, body)
     return body
 
@@ -98,6 +98,8 @@ def _sanitize_body_dict(context: Any, body: dict) -> dict:
 
 def _enforce_field_types(body: dict) -> None:
     """Remove non-string values from string fields and coerce numeric string fields."""
+    if "step" in body:
+        body["step"] = _clamp_int64(body["step"])
     for field in _STRING_FIELDS:
         if field in body and not isinstance(body[field], str):
             del body[field]
@@ -148,6 +150,9 @@ def map_query(context: Any, query: dict[str, Any] | None) -> dict[str, Any] | No
 @schemathesis.hook
 def map_case(context: Any, case: Case) -> Case:
     """Fix parameter constraints the OpenAPI spec cannot express."""
+    # Coverage and explicit examples bypass the component generation hooks.
+    case.body = map_body(context, case.body)
+    case.query = map_query(context, case.query)
     _fix_path_param_ids(case)
     _fix_body_id(case)
     _fix_artifact_body(case)
@@ -204,7 +209,7 @@ def _fix_body_id(case: Case) -> None:
 
 
 _ID_PATH_PARAMS = {"id", "registered_model_id", "model_version_id",
-                   "inference_service_id", "serving_environment_id", "servemodelId"}
+                   "inference_service_id", "serving_environment_id", "model_artifact_id"}
 
 
 def _fix_path_param_ids(case: Case) -> None:
@@ -381,7 +386,6 @@ def generated_schema(request: pytest.FixtureRequest, pytestconfig: pytest.Config
 def auth_headers(user_token: str) -> dict[str, str]:
     """Provides authorization headers for API requests."""
     return {
-        "Content-Type": "application/json",
         "Authorization": f"Bearer {user_token}",
     }
 
